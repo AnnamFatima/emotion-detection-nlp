@@ -1,51 +1,46 @@
 import streamlit as st
 import joblib
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+import string
 
-# Load model and vectorizer
+# Download NLTK resources
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+# Load saved model, vectorizer, and label encoder
 model = joblib.load("emotion_model.pkl")
 vectorizer = joblib.load("tfidf_vectorizer.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
 
-# Mapping: model's numeric output → emotion label
-emotion_map = {
-    0: 'joy',
-    1: 'sadness',
-    2: 'anger',
-    3: 'fear',
-    4: 'disgust',
-    5: 'neutral'
-}
-
-# Emoji for each emotion
-emojis = {
-    'joy': '😊',
-    'sadness': '😢',
-    'anger': '😠',
-    'fear': '😨',
-    'disgust': '🤢',
-    'neutral': '😐'
-}
+# Text preprocessing function
+def preprocess_text(text):
+    text = text.lower()
+    tokens = word_tokenize(text)
+    tokens = [word for word in tokens if word.isalpha()]  # Remove punctuation/numbers
+    stop_words = set(stopwords.words('english'))
+    tokens = [word for word in tokens if word not in stop_words]
+    lemmatizer = WordNetLemmatizer()
+    tokens = [lemmatizer.lemmatize(word) for word in tokens]
+    return ' '.join(tokens)
 
 # Streamlit UI
 st.set_page_config(page_title="Emotion Detection App", layout="centered")
-st.title("🧠 Emotion Detection from Text")
-st.markdown("Enter a sentence to find out the emotion behind it!")
+st.title("😃 Emotion Detection from Text")
+st.markdown("Enter a sentence or paragraph and the model will predict the emotion.")
 
-# Input
-text_input = st.text_area("Enter your message here:")
+# User input
+user_input = st.text_area("Enter text here:")
 
-if st.button("Detect Emotion"):
-    if text_input.strip() == "":
-        st.warning("⚠️ Please enter some text.")
+if st.button("Predict Emotion"):
+    if user_input.strip() == "":
+        st.warning("Please enter some text.")
     else:
-        # Vectorize and predict
-        vectorized_input = vectorizer.transform([text_input])
-        prediction = model.predict(vectorized_input)
-        pred_int = int(prediction[0])
-
-        # Map prediction to emotion
-        emotion = emotion_map.get(pred_int, str(pred_int))
-        emoji = emojis.get(emotion.lower(), '')
-
-        # Show result
-        st.markdown(f"### 🎯 Detected Emotion: **{emotion.capitalize()}** {emoji}")
-        st.write("Raw Model Output:", pred_int)
+        processed_text = preprocess_text(user_input)
+        vectorized_text = vectorizer.transform([processed_text])
+        prediction = model.predict(vectorized_text)
+        predicted_emotion = label_encoder.inverse_transform(prediction)[0]
+        st.success(f"**Predicted Emotion:** `{predicted_emotion}`")
