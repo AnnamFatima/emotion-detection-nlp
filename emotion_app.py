@@ -1,46 +1,60 @@
+# emotion_app.py
+
 import streamlit as st
 import joblib
+import pickle
+import re
 import nltk
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-import string
 
-# Download NLTK resources
-nltk.download('punkt')
 nltk.download('stopwords')
-nltk.download('wordnet')
 
-# Load saved model, vectorizer, and label encoder
+# Load model components
 model = joblib.load("emotion_model.pkl")
-vectorizer = joblib.load("tfidf_vectorizer.pkl")
-label_encoder = joblib.load("label_encoder.pkl")
+vectorizer = joblib.load("vectorizer.pkl")
+with open("label_encoder.pkl", "rb") as f:
+    label_encoder = pickle.load(f)
 
-# Text preprocessing function
-def preprocess_text(text):
+# Emojis dictionary
+emoji_dict = {
+    "joy": "😊",
+    "sadness": "😢",
+    "anger": "😠",
+    "fear": "😱",
+    "love": "❤️",
+    "surprise": "😲"
+}
+
+# Preprocess function
+def preprocess(text):
     text = text.lower()
-    tokens = word_tokenize(text)
-    tokens = [word for word in tokens if word.isalpha()]  # Remove punctuation/numbers
-    stop_words = set(stopwords.words('english'))
-    tokens = [word for word in tokens if word not in stop_words]
-    lemmatizer = WordNetLemmatizer()
-    tokens = [lemmatizer.lemmatize(word) for word in tokens]
-    return ' '.join(tokens)
+    text = re.sub(r"http\S+|www\S+|https\S+", '', text)
+    text = re.sub(r'\@w+|\#','', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'\d+', '', text)
+    tokens = text.split()
+    tokens = [t for t in tokens if t not in stopwords.words('english')]
+    return " ".join(tokens)
 
 # Streamlit UI
-st.set_page_config(page_title="Emotion Detection App", layout="centered")
-st.title("😃 Emotion Detection from Text")
-st.markdown("Enter a sentence or paragraph and the model will predict the emotion.")
+st.set_page_config(page_title="Emotion Detector", page_icon="🔍")
+st.title("😄 Emotion Detection from Text")
 
-# User input
-user_input = st.text_area("Enter text here:")
+user_input = st.text_area("Enter a sentence to detect its emotion:")
 
-if st.button("Predict Emotion"):
+if st.button("Detect Emotion"):
     if user_input.strip() == "":
         st.warning("Please enter some text.")
     else:
-        processed_text = preprocess_text(user_input)
-        vectorized_text = vectorizer.transform([processed_text])
+        clean_text = preprocess(user_input)
+        vectorized_text = vectorizer.transform([clean_text])
         prediction = model.predict(vectorized_text)
-        predicted_emotion = label_encoder.inverse_transform(prediction)[0]
-        st.success(f"**Predicted Emotion:** `{predicted_emotion}`")
+
+        predicted_label = label_encoder.inverse_transform([int(prediction[0])])[0]
+        emoji = emoji_dict.get(predicted_label.lower(), "🙂")
+
+        st.success(f"🎉 The predicted emotion is: **{predicted_label.upper()} {emoji}**")
+
+
+
+

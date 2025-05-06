@@ -1,83 +1,62 @@
-import pandas as pd
-import nltk
-import string
-import pickle
+# train_and_save_models.py
 
+import pandas as pd
+import re
+import string
+import nltk
+import pickle
+import joblib
+from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
 
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-
-# Download required NLTK data
-nltk.download('punkt')
+# Download stopwords
 nltk.download('stopwords')
-nltk.download('wordnet')
 
-# Load dataset
-df = pd.read_csv("emotion_dataset.csv")
-print("Columns:", df.columns)
+# Load your dataset
+# Replace this with your actual dataset path and structure
+df = pd.read_csv("emotion_dataset.csv")  # Assume columns: 'text', 'emotion'
 
-# Check if 'text' and 'label' columns exist
-if 'text' not in df.columns or 'label' not in df.columns:
-    raise ValueError("Required columns 'text' and 'label' not found in dataset.")
+# Preprocessing function
+def preprocess(text):
+    text = text.lower()
+    text = re.sub(r"http\S+|www\S+|https\S+", '', text)
+    text = re.sub(r'\@w+|\#','', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'\d+', '', text)
+    tokens = text.split()
+    tokens = [t for t in tokens if t not in stopwords.words('english')]
+    return " ".join(tokens)
 
-# Text preprocessing function
-def preprocess_text(text):
-    tokens = nltk.word_tokenize(text.lower())
-    tokens = [t for t in tokens if t not in string.punctuation]
-    stop_words = set(stopwords.words('english'))
-    tokens = [t for t in tokens if t not in stop_words]
-    lemmatizer = WordNetLemmatizer()
-    tokens = [lemmatizer.lemmatize(t) for t in tokens]
-    return ' '.join(tokens)
+# Preprocess text data
+df['clean_text'] = df['text'].apply(preprocess)
 
-# Apply preprocessing
-df['clean_text'] = df['text'].astype(str).apply(preprocess_text)
+# Encode labels
+label_encoder = LabelEncoder()
+df['label'] = label_encoder.fit_transform(df['emotion'])
 
-# Label Encoding (handle both string and numeric labels)
-if df['label'].dtype == 'object':
-    label_encoder = LabelEncoder()
-    df['label_encoded'] = label_encoder.fit_transform(df['label'])
-    target_names = label_encoder.classes_
-else:
-    df['label_encoded'] = df['label']
-    label_encoder = None  # Not needed
-    target_names = [str(i) for i in sorted(df['label'].unique())]
+# Save the label encoder
+with open("label_encoder.pkl", "wb") as f:
+    pickle.dump(label_encoder, f)
 
-# Features and Labels
-X = df['clean_text']
-y = df['label_encoded']
-
-# Vectorize
+# Vectorize text
 vectorizer = TfidfVectorizer()
-X_vectorized = vectorizer.fit_transform(X)
+X = vectorizer.fit_transform(df['clean_text'])
+y = df['label']
 
-# Split dataset
-X_train, X_test, y_train, y_test = train_test_split(X_vectorized, y, test_size=0.2, random_state=42)
+# Save the vectorizer
+joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
 
 # Train model
-clf = LogisticRegression(max_iter=200)
-clf.fit(X_train, y_train)
+model = LogisticRegression()
+model.fit(X, y)
 
-# Evaluate
-y_pred = clf.predict(X_test)
-print("\nClassification Report:\n")
-print(classification_report(y_test, y_pred, target_names=target_names))
+# Save the model
+joblib.dump(model, "emotion_model.pkl")
 
-# Save model
-with open("emotion_classifier.pkl", "wb") as f:
-    pickle.dump(clf, f)
+print("✅ Training complete. Model, vectorizer, and label encoder saved.")
 
-with open("tfidf_vectorizer.pkl", "wb") as f:
-    pickle.dump(vectorizer, f)
 
-if label_encoder:
-    with open("label_encoder.pkl", "wb") as f:
-        pickle.dump(label_encoder, f)
-
-print("✅ Model, vectorizer, and encoder saved successfully.")
 
