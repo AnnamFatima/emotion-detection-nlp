@@ -1,59 +1,54 @@
-# emotion_app.py
-
 import streamlit as st
 import joblib
-import pickle
-import re
-import nltk
-from nltk.corpus import stopwords
 
-nltk.download('stopwords')
-
-# Load model components
+# Load model and vectorizer
 model = joblib.load("emotion_model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")
-with open("label_encoder.pkl", "rb") as f:
-    label_encoder = pickle.load(f)
+vectorizer = joblib.load("tfidf_vectorizer.pkl")
 
-# Emojis dictionary
-emoji_dict = {
-    "joy": "😊",
-    "sadness": "😢",
-    "anger": "😠",
-    "fear": "😱",
-    "love": "❤️",
-    "surprise": "😲"
+# Mapping: model's numeric output → emotion label
+emotion_map = {
+    0: 'joy',
+    1: 'sadness',
+    2: 'anger',
+    3: 'fear',
+    4: 'disgust',
+    5: 'neutral'
 }
 
-# Preprocess function
-def preprocess(text):
-    text = text.lower()
-    text = re.sub(r"http\S+|www\S+|https\S+", '', text)
-    text = re.sub(r'\@w+|\#','', text)
-    text = re.sub(r'[^\w\s]', '', text)
-    text = re.sub(r'\d+', '', text)
-    tokens = text.split()
-    tokens = [t for t in tokens if t not in stopwords.words('english')]
-    return " ".join(tokens)
+# Emoji for each emotion
+emojis = {
+    'joy': '😊',
+    'sadness': '😢',
+    'anger': '😠',
+    'fear': '😨',
+    'disgust': '🤢',
+    'neutral': '😐'
+}
 
 # Streamlit UI
-st.set_page_config(page_title="Emotion Detector", page_icon="🔍")
-st.title("😄 Emotion Detection from Text")
+st.set_page_config(page_title="Emotion Detection App", layout="centered")
+st.title("🧠 Emotion Detection from Text")
+st.markdown("Enter a sentence to find out the emotion behind it!")
 
-user_input = st.text_area("Enter a sentence to detect its emotion:")
+# Input
+text_input = st.text_area("Enter your message here:")
 
 if st.button("Detect Emotion"):
-    if user_input.strip() == "":
-        st.warning("Please enter some text.")
+    if text_input.strip() == "":
+        st.warning("⚠️ Please enter some text.")
     else:
-        clean_text = preprocess(user_input)
-        vectorized_text = vectorizer.transform([clean_text])
-        prediction = model.predict(vectorized_text)
+        # Vectorize and predict
+        vectorized_input = vectorizer.transform([text_input])
+        prediction = model.predict(vectorized_input)
+        pred_int = int(prediction[0])
 
-        predicted_label = label_encoder.inverse_transform([int(prediction[0])])[0]
-        emoji = emoji_dict.get(predicted_label.lower(), "🙂")
+        # Map prediction to emotion
+        emotion = emotion_map.get(pred_int, str(pred_int))
+        emoji = emojis.get(emotion.lower(), '')
 
-        st.success(f"🎉 The predicted emotion is: **{predicted_label.upper()} {emoji}**")
+        # Show result
+        st.markdown(f"### 🎯 Detected Emotion: **{emotion.capitalize()}** {emoji}")
+        st.write("Raw Model Output:", pred_int)
 
 
 
