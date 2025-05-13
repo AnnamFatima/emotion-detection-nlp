@@ -1,0 +1,18 @@
+I'm not happy with delay -> neutral (5)
+Why is it taking so long? -> neutral (5)
+I'm not happy -> neutral (5)
+I'm not at all happy with the services -> neutral (5)
+I'm not at all happy with the services -> neutral (5)
+I'm not at all happy with the service. -> neutral (5)
+Im not at all happy with the service -> anger (2)
+Im not happy with the service -> anger (2)
+Im unhappy with the service -> fear (3)
+pathetic service
+ -> fear (3)
+I'm happy -> neutral (5)
+How long is this going to take  -> neutral (5)
+I don't think ill continue with your service -> fear (3)
+I'm not happy with the service -> anger (2)
+I'm not happy with the service -> anger (2)
+I'm not happy with the service
+ -> sadness (1)

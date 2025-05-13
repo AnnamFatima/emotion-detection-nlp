@@ -1,67 +1,110 @@
+# -*- coding: utf-8 -*-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+
 import pandas as pd
+import numpy as np
 import re
 import string
 import nltk
-import joblib
-
 from nltk.corpus import stopwords
-from sklearn.preprocessing import LabelEncoder
+from nltk.tokenize import word_tokenize
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.preprocessing import LabelEncoder
 
-# Download stopwords
+# Download NLTK data
+nltk.download('punkt')
 nltk.download('stopwords')
-stop_words = set(stopwords.words('english'))
 
-def preprocess_text(text):
-    text = text.lower()
-    text = text.translate(str.maketrans('', '', string.punctuation))
-    text = re.sub(r'\d+', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    text = ' '.join([word for word in text.split() if word not in stop_words])
-    return text
+# Load the dataset
+df = pd.read_csv('emotion_dataset.csv')
 
-# Load dataset
-df = pd.read_csv("emotion_dataset.csv")
+# Drop rows with nulls
+df.dropna(inplace=True)
 
-# If labels are numeric, map them to string
-if df['label'].dtype != 'object':
-    label_map = {
-        0: 'joy', 1: 'sadness', 2: 'anger',
-        3: 'fear', 4: 'disgust', 5: 'neutral'
-    }
-    df['label'] = df['label'].map(label_map)
+# Ensure labels are strings
+df['label'] = df['label'].astype(str)
 
 # Encode labels
 le = LabelEncoder()
 df['label'] = le.fit_transform(df['label'])
 
-# Save label encoder
-joblib.dump(le, "label_encoder.pkl")
+# Text preprocessing function
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    text = re.sub(r"\s+", " ", text)
+    tokens = word_tokenize(text)
+    tokens = [t for t in tokens if t not in stopwords.words('english')]
+    return " ".join(tokens)
 
-# Preprocess text
-df['clean_text'] = df['text'].apply(preprocess_text)
+# Apply preprocessing
+df['processed_text'] = df['text'].apply(preprocess_text)
 
-# Vectorize
-vectorizer = TfidfVectorizer(max_features=5000)
-X = vectorizer.fit_transform(df['clean_text'])
-y = df['label']
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(df['processed_text'], df['label'], test_size=0.2, random_state=42)
 
-# Save vectorizer
-joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
+# TF-IDF Vectorizer
+vectorizer = TfidfVectorizer(max_features=10000)
+X_train_tfidf = vectorizer.fit_transform(X_train)
+X_test_tfidf = vectorizer.transform(X_test)
 
-# Split and train
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-model = LogisticRegression(max_iter=200)
-model.fit(X_train, y_train)
+# Logistic Regression with Grid Search
+param_grid = {
+    'C': [0.1, 1, 10],
+    'penalty': ['l2'],
+    'solver': ['liblinear']
+}
+log_reg = LogisticRegression()
+grid = GridSearchCV(log_reg, param_grid, cv=3)
+grid.fit(X_train_tfidf, y_train)
 
-# Save model
-joblib.dump(model, "emotion_model.pkl")
+print("Best Parameters:", grid.best_params_)
+print("Best Cross-Validated Accuracy:", grid.best_score_)
 
-# Evaluate
-y_pred = model.predict(X_test)
-print("Accuracy:", accuracy_score(y_test, y_pred))
-print("Classification Report:\n", classification_report(y_test, y_pred))
+best_model = grid.best_estimator_
+y_pred = best_model.predict(X_test_tfidf)
+print("Test Accuracy After Tuning:", accuracy_score(y_test, y_pred))
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+
+# Logistic Regression comparison
+log_reg2 = LogisticRegression(C=1, penalty='l2', solver='liblinear')
+log_reg2.fit(X_train_tfidf, y_train)
+y_pred_log = log_reg2.predict(X_test_tfidf)
+print("\nLogistic Regression Accuracy:", accuracy_score(y_test, y_pred_log))
+print(classification_report(y_test, y_pred_log))
+
+# Naive Bayes
+nb = MultinomialNB()
+nb.fit(X_train_tfidf, y_train)
+y_pred_nb = nb.predict(X_test_tfidf)
+print("\nNaive Bayes Accuracy:", accuracy_score(y_test, y_pred_nb))
+print(classification_report(y_test, y_pred_nb))
+
+# SVM
+svm = LinearSVC()
+svm.fit(X_train_tfidf, y_train)
+y_pred_svm = svm.predict(X_test_tfidf)
+print("\nSVM Accuracy:", accuracy_score(y_test, y_pred_svm))
+print(classification_report(y_test, y_pred_svm))
+
+# Check overfitting or underfitting
+training_accuracy = accuracy_score(y_train, best_model.predict(X_train_tfidf))
+test_accuracy = accuracy_score(y_test, best_model.predict(X_test_tfidf))
+print("\nTraining Accuracy:", training_accuracy)
+print("Test Accuracy:", test_accuracy)
+
+if abs(training_accuracy - test_accuracy) < 0.02:
+    print("✅ The model generalizes well (no significant overfitting).")
+elif training_accuracy > test_accuracy:
+    print("⚠️ The model may be overfitting.")
+else:
+    print("🔍 The model may be underfitting.")
 
